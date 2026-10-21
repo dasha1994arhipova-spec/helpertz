@@ -5,9 +5,98 @@
   var actionsList = document.getElementById("actions-list");
   var addActionBtn = document.getElementById("add-action");
   var clearBtn = document.getElementById("clear-btn");
+  var copyBtn = document.getElementById("copy-btn");
+  var copyFeedback = document.getElementById("copy-feedback");
   var resultArea = document.getElementById("result");
   var lastBuiltText = "";
   var actionCounter = 0;
+  var copyFeedbackTimer = null;
+
+  function updateCopyButtonState() {
+    copyBtn.disabled = !hasText(resultArea.value);
+  }
+
+  function hideCopyFeedback() {
+    if (copyFeedbackTimer) {
+      window.clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = null;
+    }
+    copyFeedback.hidden = true;
+    copyFeedback.textContent = "";
+    copyFeedback.classList.remove("is-success", "is-hint");
+  }
+
+  function showCopyFeedback(message, kind) {
+    if (copyFeedbackTimer) {
+      window.clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = null;
+    }
+    copyFeedback.hidden = false;
+    copyFeedback.textContent = message;
+    copyFeedback.classList.remove("is-success", "is-hint");
+    copyFeedback.classList.add(kind === "success" ? "is-success" : "is-hint");
+    if (kind === "success") {
+      copyFeedbackTimer = window.setTimeout(function () {
+        hideCopyFeedback();
+      }, 4000);
+    }
+  }
+
+  function selectResultText() {
+    resultArea.focus();
+    resultArea.select();
+    if (typeof resultArea.setSelectionRange === "function") {
+      resultArea.setSelectionRange(0, resultArea.value.length);
+    }
+  }
+
+  function copyWithExecCommand() {
+    selectResultText();
+    try {
+      return document.execCommand("copy");
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function copyResultText() {
+    var text = resultArea.value;
+    if (!hasText(text)) {
+      updateCopyButtonState();
+      return;
+    }
+
+    hideCopyFeedback();
+
+    function onSuccess() {
+      showCopyFeedback("ТЗ скопировано", "success");
+    }
+
+    function onManualFallback() {
+      selectResultText();
+      showCopyFeedback(
+        "Автоматическое копирование недоступно. Текст выделен в поле — нажмите Ctrl+C (на Mac: ⌘C), чтобы скопировать вручную.",
+        "hint"
+      );
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(function () {
+        if (copyWithExecCommand()) {
+          onSuccess();
+        } else {
+          onManualFallback();
+        }
+      });
+      return;
+    }
+
+    if (copyWithExecCommand()) {
+      onSuccess();
+    } else {
+      onManualFallback();
+    }
+  }
 
   function trim(value) {
     return (value || "").replace(/^\s+|\s+$/g, "");
@@ -485,6 +574,8 @@
     clearErrors();
     resultArea.value = "";
     lastBuiltText = "";
+    hideCopyFeedback();
+    updateCopyButtonState();
     document.getElementById("product-idea").focus();
   }
 
@@ -525,6 +616,8 @@
     var doc = buildDocument(data);
     resultArea.value = doc;
     lastBuiltText = doc;
+    hideCopyFeedback();
+    updateCopyButtonState();
     resultArea.focus();
   });
 
@@ -538,6 +631,16 @@
     resetForm();
   });
 
+  copyBtn.addEventListener("click", function () {
+    copyResultText();
+  });
+
+  resultArea.addEventListener("input", function () {
+    hideCopyFeedback();
+    updateCopyButtonState();
+  });
+
   actionsList.appendChild(createActionRow(""));
   updateRemoveButtons();
+  updateCopyButtonState();
 })();
